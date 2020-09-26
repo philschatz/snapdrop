@@ -1,5 +1,10 @@
+const dns = require('dns');
 const parser = require('ua-parser-js');
 const { uniqueNamesGenerator, animals, colors } = require('unique-names-generator');
+
+const PEER_IP = SENDER_IP = 'hello'
+
+const dnsCache = new Map()
 
 class SnapdropServer {
 
@@ -47,9 +52,9 @@ class SnapdropServer {
         }
 
         // relay message to recipient
-        if (message.to && this._rooms[sender.ip]) {
+        if (message.to && this._rooms[SENDER_IP]) {
             const recipientId = message.to; // TODO: sanitize
-            const recipient = this._rooms[sender.ip][recipientId];
+            const recipient = this._rooms[SENDER_IP][recipientId];
             delete message.to;
             // add sender id
             message.sender = sender.id;
@@ -60,13 +65,15 @@ class SnapdropServer {
 
     _joinRoom(peer) {
         // if room doesn't exist, create it
-        if (!this._rooms[peer.ip]) {
-            this._rooms[peer.ip] = {};
+        console.log(`peer is joining room. peer ip=`, peer.ip)
+        console.log(`before we goany further, here are the rooms`, this._rooms)
+        if (!this._rooms[PEER_IP]) {
+            this._rooms[PEER_IP] = {};
         }
 
         // notify all other peers
-        for (const otherPeerId in this._rooms[peer.ip]) {
-            const otherPeer = this._rooms[peer.ip][otherPeerId];
+        for (const otherPeerId in this._rooms[PEER_IP]) {
+            const otherPeer = this._rooms[PEER_IP][otherPeerId];
             this._send(otherPeer, {
                 type: 'peer-joined',
                 peer: peer.getInfo()
@@ -75,8 +82,8 @@ class SnapdropServer {
 
         // notify peer about the other peers
         const otherPeers = [];
-        for (const otherPeerId in this._rooms[peer.ip]) {
-            otherPeers.push(this._rooms[peer.ip][otherPeerId].getInfo());
+        for (const otherPeerId in this._rooms[PEER_IP]) {
+            otherPeers.push(this._rooms[PEER_IP][otherPeerId].getInfo());
         }
 
         this._send(peer, {
@@ -85,24 +92,24 @@ class SnapdropServer {
         });
 
         // add peer to room
-        this._rooms[peer.ip][peer.id] = peer;
+        this._rooms[PEER_IP][peer.id] = peer;
     }
 
     _leaveRoom(peer) {
-        if (!this._rooms[peer.ip] || !this._rooms[peer.ip][peer.id]) return;
-        this._cancelKeepAlive(this._rooms[peer.ip][peer.id]);
+        if (!this._rooms[PEER_IP] || !this._rooms[PEER_IP][peer.id]) return;
+        this._cancelKeepAlive(this._rooms[PEER_IP][peer.id]);
 
         // delete the peer
-        delete this._rooms[peer.ip][peer.id];
+        delete this._rooms[PEER_IP][peer.id];
 
         peer.socket.terminate();
         //if room is empty, delete the room
-        if (!Object.keys(this._rooms[peer.ip]).length) {
-            delete this._rooms[peer.ip];
+        if (!Object.keys(this._rooms[PEER_IP]).length) {
+            delete this._rooms[PEER_IP];
         } else {
             // notify all other peers
-            for (const otherPeerId in this._rooms[peer.ip]) {
-                const otherPeer = this._rooms[peer.ip][otherPeerId];
+            for (const otherPeerId in this._rooms[PEER_IP]) {
+                const otherPeer = this._rooms[PEER_IP][otherPeerId];
                 this._send(otherPeer, { type: 'peer-left', peerId: peer.id });
             }
         }
@@ -187,12 +194,22 @@ class Peer {
 
     _setName(req) {
         var ua = parser(req.headers['user-agent']);
+        let displayName = uniqueNamesGenerator({ length: 2, separator: ' ', dictionaries: [colors, animals], style: 'capital' })
+        if (dnsCache.has(this.ip)) {
+            displayName = `${dnsCache.get(this.ip)} (${displayName})`
+        } else {
+            dns.reverse(this.ip, (err, hostnames) => {
+                if (!err && hostnames.length > 0) {
+                    dnsCache.set(this.ip, hostnames[0])
+                }
+            })
+        }
         this.name = {
             model: ua.device.model,
             os: ua.os.name,
             browser: ua.browser.name,
             type: ua.device.type,
-            displayName: uniqueNamesGenerator({ length: 2, separator: ' ', dictionaries: [colors, animals], style: 'capital' })
+            displayName: displayName
         };
     }
 

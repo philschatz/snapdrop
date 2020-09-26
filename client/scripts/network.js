@@ -108,6 +108,18 @@ class Peer {
         }
         if (this._busy) return;
         this._dequeueFile();
+        this._verifyChannelOpened();
+    }
+
+    _verifyChannelOpened() {
+        if (!this._channelOpenedTimeOut) {
+            this._channelOpenedTimeOut = setTimeout(() => {
+                this._channelOpenedTimeOut = 0
+                if (!this._channel) {
+                    alert('Could not open connection. This occurs with Firefox/Safari or maybe with ad-blocker settings like "Prevent WebRTC from leaking local IP address" and "Dsable Pre-fetching"')
+                }
+            }, 1000)
+        }
     }
 
     _dequeueFile() {
@@ -216,6 +228,7 @@ class Peer {
     sendText(text) {
         const unescaped = btoa(unescape(encodeURIComponent(text)));
         this.sendJSON({ type: 'text', text: unescaped });
+        this._verifyChannelOpened();
     }
 
     _onTextReceived(message) {

@@ -97,6 +97,7 @@ class PeerUI {
         el.ui = this;
         el.querySelector('svg use').setAttribute('xlink:href', this._icon());
         el.querySelector('.name').textContent = this._name();
+        el.querySelector('.name').setAttribute('title', this._name());
         this.$el = el;
         this.$progress = el.querySelector('.progress');
     }
